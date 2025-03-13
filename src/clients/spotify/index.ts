@@ -54,14 +54,14 @@ export class SpotifyClient {
 
     public parseError(error: NonNullable<SpotifyErrorRequest['error']>): undefined {
         if (error.status === 404 && error.message.includes('Resource not found')) {
-            throw new Error('Recurso não encontrado');
+            throw new Error('Resource not found');
         }
 
         if (error.status === 400 && error.message.includes('Invalid base62 id')) {
-            throw new Error('ID inválido');
+            throw new Error('Invalid ID');
         }
 
-        throw new Error('Erro ao obter informações, erro: ' + error.message);
+        throw new Error('Error getting information, error: ' + error.message);
     }
 
     public parseTracks(tracks: TrackInfo[]) {
@@ -127,7 +127,7 @@ export class SpotifyClient {
             global['spotifyToken'] = data.access_token;
             setTimeout(() => this.refreshToken(), data.expires_in * 1e3 - 5e3);
         } catch (error) {
-            throw new Error(`Não foi possível obter o token de acesso, erro: ${error}`);
+            throw new Error('Could not get access token, error: ' + error);
         }
     }
 }
