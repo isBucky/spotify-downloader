@@ -137,7 +137,7 @@ const folderPrompt = createPrompt<string, PromptOptions>((config, done) => {
         return `${prefix} ${selectedMessage}`;
     }
 
-    const title = `${chalk.white(config.message)} ${chalk.bold.cyan(currentDir)}`;
+    const title = `${chalk.bold(config.message)} ${chalk.bold.cyan(currentDir)}`;
     const visibleChoices = choices.slice(startIndex, endIndex); // Only visible items
 
     const options = visibleChoices.map((choice, index) => {
