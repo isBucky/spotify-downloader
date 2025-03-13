@@ -3,8 +3,11 @@ import { confirm, input } from '@inquirer/prompts';
 import { SpotifyClient } from './clients/spotify';
 import { YoutubeClient } from './clients/youtube';
 
+import chalk from 'chalk';
+
 // Types
 import type { TrackInfo } from '../types/client-spotify';
+import { inspect } from 'util';
 
 export class SpotifyDownloader {
     public spotify: SpotifyClient;
@@ -31,65 +34,87 @@ export class SpotifyDownloader {
     public async download(url: string, dir: string) {
         const { id, type } = this.spotify.parseSpotifyUrl(url);
 
-        switch (type) {
-            case 'playlist':
-                {
-                    console.log(`Searching for playlist with ID ${id}...`);
+        try {
+            switch (type) {
+                case 'playlist':
+                    {
+                        console.log(chalk.bold(`🔎 Searching for playlist with ID ${id}...`));
 
-                    const playlist = await this.spotify.playlist.get(id);
-                    if (!playlist) return console.log('Playlist not found');
+                        const playlist = await this.spotify.playlist.get(id);
+                        if (!playlist)
+                            return console.log(chalk.red('x'), chalk.bold('Playlist not found'));
 
-                    const tracks = await this.spotify.playlist.tracks(id, 0);
-                    if (!tracks) return console.log('Playlist not found');
+                        const tracks = await this.spotify.playlist.tracks(id, 0);
+                        if (!tracks)
+                            return console.log(chalk.red('x'), chalk.bold('Playlist not found'));
 
-                    console.log(`Playlist found! Total of ${tracks.total} tracks\n`);
+                        console.log(
+                            chalk.green('✔'),
+                            chalk.bold(`Playlist found! Total of ${tracks.total} songs\n`),
+                        );
 
-                    await this.downloadMassive(id, `${dir}/${playlist.name}`, 'playlist', tracks);
+                        await this.downloadMassive(
+                            id,
+                            `${dir}/${playlist.name}`,
+                            'playlist',
+                            tracks,
+                        );
+                    }
+                    break;
+
+                case 'album':
+                    {
+                        console.log(chalk.bold(`🔎 Searching for album with ID ${id}...`));
+
+                        const album = await this.spotify.album.get(id);
+                        if (!album)
+                            return console.log(chalk.red('x'), chalk.bold('Album not found'));
+
+                        const tracks = await this.spotify.album.tracks(id, 0);
+                        if (!tracks)
+                            return console.log(chalk.red('x'), chalk.bold('Album not found'));
+
+                        console.log(
+                            chalk.green('✔'),
+                            chalk.bold(`Album found! Total of ${tracks.total} songs\n`),
+                        );
+
+                        await this.downloadMassive(id, `${dir}/${album.name}`, 'album', tracks);
+                    }
+                    break;
+
+                case 'track': {
+                    console.log(chalk.bold(`🔎 Searching for song with ID ${id}...`));
+
+                    const track = await this.spotify.track.get(id);
+                    if (!track) return console.log(chalk.red('x'), chalk.bold('Song not found'));
+
+                    console.log(
+                        chalk.green('✔'),
+                        chalk.bold(`Song found: '${track.name}' by '${track.artists[0].name}'\n`),
+                    );
+
+                    return await this.searchInYoutubeAndDownload(track, dir);
                 }
-                break;
 
-            case 'album':
-                {
-                    console.log(`Searching for album with ID ${id}...`);
-
-                    const album = await this.spotify.album.get(id);
-                    if (!album) return console.log('Album not found');
-
-                    const tracks = await this.spotify.album.tracks(id, 0);
-                    if (!tracks) return console.log('Album not found');
-
-                    console.log(`Album found! Total of ${tracks.total} tracks\n`);
-
-                    await this.downloadMassive(id, `${dir}/${album.name}`, 'album', tracks);
-                }
-                break;
-
-            case 'track': {
-                console.log(`Searching for track with ID ${id}...`);
-
-                const track = await this.spotify.track.get(id);
-                if (!track) return console.log('Track not found');
-
-                console.log(`Track found: '${track.name}' by '${track.artists[0].name}'\n`);
-
-                return await this.searchInYoutubeAndDownload(track, dir);
+                case 'unknown':
+                    console.log(chalk.red('x'), chalk.bold('Invalid URL'));
+                    break;
             }
-
-            case 'unknown':
-                console.log('Invalid URL');
-                break;
+        } catch (error) {
+            console.log(chalk.red('x'), chalk.bold('Error:'), inspect(error, { colors: true }));
         }
     }
 
     /**
-     * Download all tracks from an album or playlist.
+     * Download all songs from an album or playlist.
      *
      * @param id The ID of the album or playlist.
-     * @param dir The directory where the tracks will be saved.
+     * @param dir The directory where the songs will be saved.
      * @param type The type of the ID (album or playlist).
-     * @param result The result of the search, with information about the tracks.
+     * @param result The result of the search, with information about the songs.
      *
-     * @returns A promise that resolves when all tracks are downloaded.
+     * @returns A promise that resolves when all songs have been downloaded.
      */
     public async downloadMassive(
         id: string,
@@ -121,10 +146,10 @@ export class SpotifyDownloader {
     }
 
     /**
-     * Search for a track on YouTube and download it as an MP3 in a directory.
+     * Search for a song in YouTube and download it in MP3 format to a directory.
      *
-     * @param track The track to search for.
-     * @param dir The directory where the track will be saved.
+     * @param track The song to be downloaded.
+     * @param dir The directory where the song will be saved.
      */
     public async searchInYoutubeAndDownload(track: TrackInfo, dir: string) {
         try {
@@ -132,24 +157,34 @@ export class SpotifyDownloader {
             const video = result.videos[0];
 
             if (!video) {
-                console.log(`No music found for '${track.name}' by '${track.artists[0].name}'`);
+                console.log(
+                    chalk.red('x'),
+                    chalk.bold(`No song found for '${track.name}' by '${track.artists[0].name}'`),
+                );
                 return;
             }
 
             await this.youtube.downloadMp3(video.url, dir);
 
-            console.log(`Music downloaded: '${track.name}' by '${track.artists[0].name}'`);
+            console.log(
+                chalk.green('✔'),
+                chalk.bold('Song downloaded:'),
+                chalk.green(`'${track.name}' by '${track.artists[0].name}'`),
+            );
         } catch (error) {
-            console.log(`Error downloading music: '${track.name}' by '${track.artists[0].name}'`, {
-                cause: error,
-            });
+            console.log(
+                chalk.red('x'),
+                chalk.bold(`Error downloading song: '${track.name}' by '${track.artists[0].name}'`),
+            );
         }
     }
 
     public async startPrompts() {
+        console.clear();
+
         const dir = await selectFolder({ message: 'Enter the download directory:' });
         const url = await input({
-            message: 'Enter the music URL:',
+            message: 'Enter the song URL:',
             required: true,
         });
 
@@ -158,7 +193,7 @@ export class SpotifyDownloader {
         console.log('');
 
         const otherDownload = await confirm({
-            message: 'Do you want to download another music?',
+            message: 'Do you want to download another song?',
             default: true,
         });
 
