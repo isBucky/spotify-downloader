@@ -8,6 +8,7 @@ import chalk from 'chalk';
 // Types
 import type { TrackInfo } from '../types/client-spotify';
 import { inspect } from 'util';
+import yts from 'yt-search';
 
 export class SpotifyDownloader {
     public spotify: SpotifyClient;
@@ -153,7 +154,9 @@ export class SpotifyDownloader {
      */
     public async searchInYoutubeAndDownload(track: TrackInfo, dir: string) {
         try {
-            const result = await this.youtube.search(`${track.name} - ${track.artists[0].name}`);
+            const result = await this.youtube.search(
+                `${track.name} - ${track.artists[0].name} lyric`,
+            );
             const video = result.videos[0];
 
             if (!video) {
@@ -172,11 +175,85 @@ export class SpotifyDownloader {
                 chalk.green(`'${track.name}' by '${track.artists[0].name}'`),
             );
         } catch (error) {
+            console.log(error);
             console.log(
                 chalk.red('x'),
                 chalk.bold(`Error downloading song: '${track.name}' by '${track.artists[0].name}'`),
             );
         }
+    }
+
+    public sortVideos(videos: yts.VideoSearchResult[]) {
+        return videos.sort((a, b) => {
+            // Se ambos não tiverem data, ordene por visualizações e depois por duração
+            if (a.ago === undefined && b.ago === undefined) {
+                // Se as visualizações forem semelhantes, priorize duração menor
+                const viewsDiff = b.views - a.views;
+                if (Math.abs(viewsDiff) < b.views * 0.2) {
+                    // Diferença menor que 20%
+                    return a.seconds - b.seconds; // Vídeos mais curtos primeiro
+                }
+                return viewsDiff;
+            }
+
+            // Se apenas um não tiver data, coloque-o por último
+            if (a.ago === undefined) return 1;
+            if (b.ago === undefined) return -1;
+
+            // Verifique se existe uma grande diferença em visualizações
+            const viewsRatio = b.views / a.views;
+
+            // Extrair informação de tempo a partir da string "ago"
+            const getTimeValue = (agoString) => {
+                const match = agoString.match(/(\d+)\s+(\w+)\s+ago/);
+                if (!match) return 0;
+
+                const value = parseInt(match[1]);
+                const unit = match[2].toLowerCase();
+
+                // Converter tudo para dias para facilitar a comparação
+                switch (unit) {
+                    case 'year':
+                    case 'years':
+                        return value * 365;
+                    case 'month':
+                    case 'months':
+                        return value * 30;
+                    case 'week':
+                    case 'weeks':
+                        return value * 7;
+                    case 'day':
+                    case 'days':
+                        return value;
+                    case 'hour':
+                    case 'hours':
+                        return value / 24;
+                    case 'minute':
+                    case 'minutes':
+                        return value / (24 * 60);
+                    default:
+                        return value;
+                }
+            };
+
+            const aDays = getTimeValue(a.ago);
+            const bDays = getTimeValue(b.ago);
+
+            // Se há grande diferença em visualizações (mais de 30%), priorize visualizações
+            if (viewsRatio > 1.3 || viewsRatio < 0.7) {
+                return b.views - a.views;
+            }
+
+            // Se os vídeos são da mesma época (diferença de menos de 30 dias)
+            const daysDiff = Math.abs(aDays - bDays);
+            if (daysDiff < 30) {
+                // Priorize o com menor duração
+                return a.seconds - b.seconds;
+            }
+
+            // Caso contrário, priorize o mais recente
+            return aDays - bDays;
+        });
     }
 
     public async startPrompts() {
