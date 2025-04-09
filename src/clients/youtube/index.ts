@@ -35,17 +35,18 @@ export class YoutubeClient {
 
                 '--embed-thumbnail',
                 '--add-metadata',
-                `-P ${path}`,
+                '-P',
 
+                path,
                 url,
-            ]).on('close', (code) => {
+            ]);
+
+            command.on('close', (code) => {
                 if (code === 0) {
                     resolve(true);
+                } else {
+                    reject(`yt-dlp process exited with code ${code}`);
                 }
-            });
-
-            command.stderr.on('data', (data) => {
-                return reject(data.toString());
             });
         });
     }
